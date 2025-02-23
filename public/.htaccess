@@ -1,0 +1,11 @@
+RewriteEngine On
+
+# Allow direct access to assets folder
+RewriteCond %{REQUEST_URI} ^/assets/.*$ [NC]
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+# Slim Routing Rule (for everything else)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . index.php [L]

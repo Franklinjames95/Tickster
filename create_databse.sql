@@ -1,0 +1,47 @@
+CREATE TABLE Users (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    username NVARCHAR(50) UNIQUE NOT NULL,
+    password_hash NVARCHAR(255) NOT NULL,
+    email NVARCHAR(100) UNIQUE NOT NULL,
+    created_at DATETIME DEFAULT GETDATE(),
+    updated_at DATETIME DEFAULT GETDATE()
+);
+
+CREATE TABLE UserSecurityStatus (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    user_id INT FOREIGN KEY REFERENCES Users(id) ON DELETE CASCADE,
+    last_login DATETIME DEFAULT GETDATE(),
+    next_permission_refresh DATETIME,
+    force_permission_refresh BIT DEFAULT 0
+);
+
+
+CREATE TABLE Roles (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    role_name NVARCHAR(50) UNIQUE NOT NULL
+);
+
+CREATE TABLE Pages (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    page_name NVARCHAR(100) UNIQUE NOT NULL,
+    page_url NVARCHAR(255) UNIQUE NOT NULL
+);
+
+CREATE TABLE Permissions (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    permission_key NVARCHAR(50) UNIQUE NOT NULL, -- e.g., 'view', 'read', 'write', 'delete'
+    description NVARCHAR(255) NOT NULL
+);
+
+CREATE TABLE RolePermissions (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    role_id INT FOREIGN KEY REFERENCES Roles(id) ON DELETE CASCADE,
+    permission_id INT FOREIGN KEY REFERENCES Permissions(id) ON DELETE CASCADE,
+    page_id INT FOREIGN KEY REFERENCES Pages(id) ON DELETE CASCADE
+);
+
+CREATE TABLE UserRoles (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    user_id INT FOREIGN KEY REFERENCES Users(id) ON DELETE CASCADE,
+    role_id INT FOREIGN KEY REFERENCES Roles(id) ON DELETE CASCADE
+);
