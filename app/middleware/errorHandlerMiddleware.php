@@ -3,9 +3,9 @@
 namespace App\Middleware;
 
 use Slim\App;
+use Slim\Routing\RouteParser;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Message\ResponseInterface as Response;
-use Slim\Exception\HttpException;
 use App\Config\CustomBlade as Blade;
 use Psr\Log\LoggerInterface;
 use Throwable;
@@ -15,13 +15,15 @@ class ErrorHandlerMiddleware {
     private App $app;
     private Blade $blade;
     private LoggerInterface $logger;
+    private RouteParser $router;
 
-    public function __construct(App $app){
+    public function __construct(App $app) {
         $this->app = $app;
         
         $container = $app->getContainer();
         $this->blade = $container->get('blade');
-        $this->logger = $container->get(LoggerInterface::class);
+        $this->logger = $container->get(LoggerInterface::class); // ✅ Use main app logger
+        $this->router = $container->get('router');
     }   
 
     public function __invoke(
@@ -32,6 +34,23 @@ class ErrorHandlerMiddleware {
         bool $logErrorDetails
     ): Response {
         $response = $this->app->getResponseFactory()->createResponse();
+
+        // Start session if not already started
+        if (session_status() === PHP_SESSION_NONE) session_start();
+
+        // Check if user is authenticated
+        $isAuthenticated = isset($_SESSION['user']);
+
+        // If it's a 404 error and the user is NOT authenticated, redirect dynamically to login
+        if (
+            $exception instanceof \Slim\Exception\HttpNotFoundException 
+            && !$isAuthenticated
+            && $request->getUri()->getPath() !== $this->router->urlFor('login')
+        ) {
+            return $response
+                ->withHeader('Location', $this->router->urlFor('login'))
+                ->withStatus(302);
+        }
 
         // Exception-to-template map
         $exceptionMap = [
@@ -45,12 +64,7 @@ class ErrorHandlerMiddleware {
         $exceptionClass = get_class($exception);
         [$template, $statusCode] = $exceptionMap[$exceptionClass] ?? ['exceptions.500', 500];
 
-        // Special case for 503 errors (handled via HttpException)
-        if($exception instanceof HttpException && $exception->getCode() === 503){
-            [$template, $statusCode] = ['exceptions.503', 503];
-        }
-
-        // Enhanced Logging Information
+        // Log error details using app.log (NOT sql.log)
         $logData = [
             'status_code' => $statusCode,
             'message' => $exception->getMessage(),
@@ -65,6 +79,7 @@ class ErrorHandlerMiddleware {
 
         $this->logger->error("[$statusCode] {$exception->getMessage()}", $logData);
 
+        // Render error page
         $html = $this->blade->run($template, [
             'title' => "Error $statusCode",
             'message' => $exception->getMessage(),

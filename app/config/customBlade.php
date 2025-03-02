@@ -26,11 +26,14 @@ class CustomBlade extends BladeOne {
      * This allows us to modify the rendering behavior globally.
      */
     public function run($view = null, $variables = []): string {
-        // Add global variables before rendering
-        $vars['app_name'] = 'Frank/Tickser';
+        // Ensure a CSRF token is always set
+        if(!isset($_SESSION['_token'])) $_SESSION['_token'] = bin2hex(random_bytes(32));        
+
+        // Pass CSRF token to all Blade views
+        $variables['csrf_token'] = $_SESSION['_token'];
 
         // Call parent method to render the view
-        return parent::run($view, $vars);
+        return parent::run($view, $variables);
     }
 
     /**

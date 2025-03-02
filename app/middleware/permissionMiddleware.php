@@ -22,30 +22,37 @@ class PermissionMiddleware implements MiddlewareInterface {
     }
 
     public function process(Request $request, Handler $handler): Response {
-
+        if($request->getAttribute('permissions_checked')){
+            return $handler->handle($request); // Skip if already checked
+        }
+    
+        $request = $request->withAttribute('permissions_checked', true); // Cache check
+    
         $userId = $_SESSION['user']['id'] ?? null;
-
+    
         if($userId){
-            if($this->permissionService->needsPermissionRefresh($userId, $this->timeout)){
-                $this->permissionService->loadPermissions($userId);
+            if($this->permissionService->needsPermissionRefresh($userId)){
+                $this->permissionService->loadPermissions($userId, $this->timeout);
             }
-
+    
             // Get route information
             $routeContext = RouteContext::fromRequest($request);
             $route = $routeContext->getRoute();
-
-            if(!$route) throw new HttpForbiddenException($request, 'Route not found or permission denied.');
+    
+            if(!$route){
+                throw new HttpForbiddenException($request, 'Route not found or permission denied.');
+            }
             
             $routeName = $route->getName();
-            $viewPermission = 'view_' . $routeName;
-
-            // Check if the user has the view permission for this route
-            $permissions = $_SESSION['security']['permissions'] ?? [];
-            if(!in_array($viewPermission, $permissions)){
+            $permissions = $_SESSION['security']['permissions'][$routeName] ?? [];
+    
+            // Check if the user has the required permission for this route
+            if(!($permissions['can_view'] ?? false)){
                 throw new HttpForbiddenException($request, 'You do not have permission to view this page.');
             }
         }
-
+    
         return $handler->handle($request);
     }
+    
 }

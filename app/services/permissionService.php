@@ -3,90 +3,55 @@
 namespace App\Services;
 
 use Psr\Container\ContainerInterface;
-use PDO;
+use App\Services\DatabaseService;
 
 class PermissionService {
-    
-    protected ContainerInterface $container;
-    protected PDO $db;
+
+    protected DatabaseService $db;
     protected int $timeout;
 
     public function __construct(ContainerInterface $container){
-        $this->container = $container;
-        $this->db = $container->get('db'); 
-        $this->timeout = $container->get('settings')['security']['permission_timeout'] ?? 900; // Default to 15 mins
+        $this->db = $container->get('db');
+        $this->timeout = $container->get('settings')['security']['permission_timeout'] ?? 900; // Default: 15 mins
     }
 
-    public function loadPermissions($userId, ?int $overrideTimeout = null){
+    public function loadPermissions(int $userId, ?int $overrideTimeout = null): void {
         $timeout = $overrideTimeout ?? $this->timeout;
 
-        // Check if permissions need to be refreshed
-        $checkQuery = $this->db->prepare("SELECT force_permission_refresh, next_permission_refresh 
-                                          FROM UserSecurityStatus 
-                                          WHERE user_id = :user_id");
-        $checkQuery->execute(['user_id' => $userId]);
-        $securityStatus = $checkQuery->fetch(\PDO::FETCH_ASSOC);
+        // Reset session permissions
+        $_SESSION['security']['permissions'] = $_SESSION['registered_pages'] = [];
 
-        $now = new \DateTime();
+        // Fetch user permissions
+        foreach ($this->db->query("SELECT * FROM UserPermissionsPivot WHERE user_id = ?", [$userId]) as $row){
+            if ($routeName = $row['route_name'] ?? null) {
+                $_SESSION['registered_pages'][] = $routeName;
+                $_SESSION['security']['permissions'][$routeName] ??= [];
 
-        if ($securityStatus['force_permission_refresh'] || 
-            (isset($securityStatus['next_permission_refresh']) 
-                && $now >= new \DateTime($securityStatus['next_permission_refresh']))) 
-        {
-            // Get user roles
-            $query = $this->db->prepare("SELECT r.id, r.role_name FROM Roles r 
-                                         JOIN UserRoles ur ON ur.role_id = r.id 
-                                         WHERE ur.user_id = :user_id");
-            $query->execute(['user_id' => $userId]);
-            $roles = $query->fetchAll(\PDO::FETCH_ASSOC);
-
-            // Store roles in session under 'security'
-            $_SESSION['security']['roles'] = array_column($roles, 'role_name');
-
-            // Get role permissions
-            $roleIds = array_column($roles, 'id');
-            if($roleIds){
-                $inPlaceholders = implode(',', array_fill(0, count($roleIds), '?'));
-                $permissionsQuery = $this->db->prepare(
-                    "SELECT DISTINCT p.permission_key FROM Permissions p 
-                     JOIN RolePermissions rp ON rp.permission_id = p.id 
-                     WHERE rp.role_id IN ($inPlaceholders)"
-                );
-                $permissionsQuery->execute($roleIds);
-                $permissions = $permissionsQuery->fetchAll(\PDO::FETCH_COLUMN);
-
-                // Store permissions in session under 'security'
-                $_SESSION['security']['permissions'] = $permissions;
+                // Store permissions dynamically
+                foreach($row as $key => $value){
+                    if(str_starts_with($key, 'can_')){
+                        $_SESSION['security']['permissions'][$routeName][$key] = (bool) $value;
+                    }
+                }
             }
-
-            // Store the last refresh timestamp under 'security'
-            $_SESSION['security']['permissions_last_refresh'] = time();
-
-            // Update the next permission refresh timestamp based on timeout
-            $nextRefresh = (new \DateTime())->add(new \DateInterval('PT' . $timeout . 'S'))->format('Y-m-d H:i:s');
-
-            // Reset the force_permission_refresh flag and set next refresh timestamp
-            $updateQuery = $this->db->prepare("UPDATE UserSecurityStatus 
-                                               SET force_permission_refresh = 0, 
-                                                   next_permission_refresh = :next_refresh 
-                                               WHERE user_id = :user_id");
-            $updateQuery->execute(['next_refresh' => $nextRefresh, 'user_id' => $userId]);
         }
+
+        // Save last refresh time
+        $_SESSION['security']['permissions_last_refresh'] = time();
+
+        // Schedule next permission refresh
+        $this->db->execute(
+            "UPDATE UserSecurityStatus SET force_permission_refresh = 0, next_permission_refresh = ? WHERE user_id = ?",
+            [date('Y-m-d H:i:s', time() + $timeout), $userId]
+        );
     }
 
-    public function needsPermissionRefresh($userId, ?int $overrideTimeout = null): bool
-    {
-        $timeout = $overrideTimeout ?? $this->timeout;
+    public function needsPermissionRefresh(int $userId): bool {
+        $securityStatus = $this->db->query(
+            "SELECT force_permission_refresh, next_permission_refresh FROM UserSecurityStatus WHERE user_id = ?",
+            [$userId]
+        )[0] ?? null;
 
-        // Check if a forced refresh is needed or if timeout has been exceeded
-        $query = $this->db->prepare("SELECT force_permission_refresh 
-                                    FROM UserSecurityStatus 
-                                    WHERE user_id = :user_id");
-        $query->execute(['user_id' => $userId]);
-        $forceRefresh = $query->fetchColumn();
-
-        $lastRefresh = $_SESSION['security']['permissions_last_refresh'] ?? 0;
-
-        return $forceRefresh || time() - $lastRefresh > $timeout;
+        return !$securityStatus || $securityStatus['force_permission_refresh'] || time() >= strtotime($securityStatus['next_permission_refresh']);
     }
 }

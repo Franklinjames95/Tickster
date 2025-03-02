@@ -17,7 +17,7 @@
             <h1 class="display-3 fw-bold text-danger">@yield('status', 'Error')</h1>
             <h2 class="fs-4 fw-semibold text-dark">@yield('message', 'Something went wrong.')</h2>
             <p class="text-secondary">@yield('description', 'Please try again later or contact support.')</p>
-            <a href="/" class="btn btn-primary mt-3">Go Home</a>
+            <a href="/dashboard" class="btn btn-primary mt-3">Go Home</a>
         </div>
     </div>
 

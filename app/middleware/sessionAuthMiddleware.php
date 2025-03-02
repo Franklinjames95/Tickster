@@ -11,6 +11,8 @@ use Slim\Exception\HttpUnauthorizedException;
 class SessionAuthMiddleware implements MiddlewareInterface {
     
     public function process(Request $request, Handler $handler): Response {
+        if(session_status() === PHP_SESSION_NONE) session_start();        
+
         if(!isset($_SESSION['user'])){
             throw new HttpUnauthorizedException($request, 'Unauthorized - Please log in');
         }
