@@ -14,11 +14,27 @@
 </head>
 <body>
 
-    <header>
-        <h1>@yield('header', 'Welcome to Tickster')</h1>
+    <header>        
+        @hasSection('header')
+            <h1 class="fw-bold">@yield('header')</h1>
+        @else
+            @include('components.navs.navbar', [
+                'logo' => '/images/logo.png',
+                'navItems' => [
+                    ['name' => 'Dashboard', 'route' => '/dashboard'],
+                    ['name' => 'Team', 'route' => '/team'],
+                    ['name' => 'Projects', 'route' => '/projects'],
+                    ['name' => 'Calendar', 'route' => '/calendar'],
+                    ['name' => 'Reports', 'route' => '/reports'],
+                ],
+                'activePage' => $_SERVER['REQUEST_URI'],
+                'userAvatar' => '/images/user-avatar.png'
+            ])
+        @endHasSection
     </header>
 
     <main>
+        
         @yield('content')
     </main>
 

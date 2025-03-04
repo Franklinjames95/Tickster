@@ -40,7 +40,7 @@ class CustomBlade extends BladeOne {
      * Registers custom Blade directives for use in templates.
      * This method allows us to define shorthand syntax and other features.
      */
-    private function registerDirectives(){
+    private function registerDirectives(){      
         /** -------------------------
          * General Utility Directives
          * ------------------------- */
@@ -57,6 +57,15 @@ class CustomBlade extends BladeOne {
     
         // Session Flash Messages: @flash('success') → Show success message
         $this->directive('flash', fn($key) => "<?= \$_SESSION['flash'][$key] ?? ''; ?>");
+
+        // Custom directive to check if a section exists: @hasSection('header')
+        $this->directive('hasSection', function ($section) {
+            return "<?php if (isset(\$this->sections[$section])): ?>";
+        });
+        
+        $this->directive('endHasSection', function () {
+            return "<?php endif; ?>";
+        });
     
         /** -------------------------
          * Security & Authentication Directives

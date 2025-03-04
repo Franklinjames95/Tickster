@@ -16,6 +16,7 @@
     @endsection
     // ///////////////////////////////////////////////
     @section('document_ready')
+    @parent
         console.log("Document Ready - Home Page");
     @endsection
     // ///////////////////////////////////////////////
